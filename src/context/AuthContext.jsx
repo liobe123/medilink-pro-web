@@ -1,0 +1,79 @@
+import { createContext, useContext, useState, useCallback } from 'react';
+import * as authApi from '../api/auth';
+
+const AuthContext = createContext(null);
+
+function readStoredUser() {
+  try {
+    const raw = sessionStorage.getItem('medilinkpro_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(readStoredUser);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const persistSession = useCallback((authResponse) => {
+    const { token, ...userInfo } = authResponse;
+    sessionStorage.setItem('medilinkpro_token', token);
+    sessionStorage.setItem('medilinkpro_user', JSON.stringify(userInfo));
+    setUser(userInfo);
+  }, []);
+
+  const login = useCallback(async (credentials) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authApi.login(credentials);
+      persistSession(response);
+      return response;
+    } catch (err) {
+      const message = err.response?.data?.message || "Email ou mot de passe incorrect.";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [persistSession]);
+
+  const register = useCallback(async (payload) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await authApi.register(payload);
+      // Patient et Admin recoivent un token et sont connectes immediatement.
+      // Medecin, Secretaire et Directeur passent par une validation admin :
+      // aucun token n'est emis, on ne connecte donc pas l'utilisateur.
+      if (response.token) {
+        persistSession(response);
+      }
+      return response;
+    } catch (err) {
+      const message = err.response?.data?.message || "Impossible de creer le compte.";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [persistSession]);
+
+  const logout = useCallback(() => {
+    sessionStorage.removeItem('medilinkpro_token');
+    sessionStorage.removeItem('medilinkpro_user');
+    setUser(null);
+  }, []);
+
+  const value = { user, loading, error, login, register, logout, isAuthenticated: !!user };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth doit etre utilise a l\'interieur de AuthProvider');
+  return ctx;
+}

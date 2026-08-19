@@ -1,0 +1,148 @@
+export function Card({ children, className = '' }) {
+  return (
+    <div className={`bg-white rounded-2xl border border-(--color-petrol-100) shadow-sm ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export function Button({ children, variant = 'primary', className = '', ...props }) {
+  const variants = {
+    primary: 'bg-(--color-petrol-600) text-white hover:bg-(--color-petrol-700)',
+    amber: 'bg-(--color-amber-400) text-(--color-petrol-900) hover:bg-(--color-amber-500)',
+    ghost: 'bg-transparent text-(--color-petrol-600) hover:bg-(--color-petrol-50)',
+    danger: 'bg-(--color-clay-100) text-(--color-clay-500) hover:bg-(--color-clay-100)/70',
+  };
+  return (
+    <button
+      className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+const STATUT_STYLES = {
+  EN_ATTENTE: 'bg-(--color-amber-400)/20 text-(--color-amber-500)',
+  CONFIRME: 'bg-(--color-sage-100) text-(--color-sage-500)',
+  ANNULE: 'bg-(--color-clay-100) text-(--color-clay-500)',
+  TERMINE: 'bg-(--color-petrol-100) text-(--color-petrol-600)',
+  NO_SHOW: 'bg-(--color-clay-100) text-(--color-clay-500)',
+};
+
+const STATUT_LABELS = {
+  EN_ATTENTE: 'En attente',
+  CONFIRME: 'Confirme',
+  ANNULE: 'Annule',
+  TERMINE: 'Termine',
+  NO_SHOW: 'Absence',
+};
+
+export function StatutBadge({ statut }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUT_STYLES[statut] || 'bg-(--color-petrol-50) text-(--color-ink-600)'}`}>
+      {STATUT_LABELS[statut] || statut}
+    </span>
+  );
+}
+
+export function Spinner({ className = '' }) {
+  return (
+    <div className={`animate-spin rounded-full border-2 border-(--color-petrol-200) border-t-(--color-petrol-600) ${className}`} />
+  );
+}
+
+export function FieldLabel({ children }) {
+  return <label className="block text-sm font-medium text-(--color-ink-600) mb-1.5">{children}</label>;
+}
+
+export function TextInput(props) {
+  return (
+    <input
+      className="w-full px-3.5 py-2.5 rounded-xl border border-(--color-petrol-100) bg-white text-(--color-ink-900) placeholder:text-(--color-ink-300) focus:border-(--color-petrol-400) focus:ring-2 focus:ring-(--color-petrol-100) outline-none transition-shadow"
+      {...props}
+    />
+  );
+}
+
+export function Select(props) {
+  return (
+    <select
+      className="w-full px-3.5 py-2.5 rounded-xl border border-(--color-petrol-100) bg-white text-(--color-ink-900) focus:border-(--color-petrol-400) focus:ring-2 focus:ring-(--color-petrol-100) outline-none transition-shadow"
+      {...props}
+    />
+  );
+}
+
+const STATUT_COMPTE_STYLES = {
+  EN_ATTENTE: 'bg-(--color-amber-400)/20 text-(--color-amber-500)',
+  APPROUVE: 'bg-(--color-sage-100) text-(--color-sage-500)',
+  REJETE: 'bg-(--color-clay-100) text-(--color-clay-500)',
+};
+
+const STATUT_COMPTE_LABELS = {
+  EN_ATTENTE: 'En attente',
+  APPROUVE: 'Approuve',
+  REJETE: 'Rejete',
+};
+
+export function StatutCompteBadge({ statut }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUT_COMPTE_STYLES[statut] || 'bg-(--color-petrol-50) text-(--color-ink-600)'}`}>
+      {STATUT_COMPTE_LABELS[statut] || statut}
+    </span>
+  );
+}
+
+const ROLE_LABELS = {
+  PATIENT: 'Patient',
+  MEDECIN: 'Medecin',
+  ADMIN: 'Administrateur',
+  DIRECTEUR: 'Directeur',
+  SECRETAIRE: 'Secretaire',
+};
+
+export function RoleBadge({ role }) {
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-(--color-petrol-50) text-(--color-petrol-600)">
+      {ROLE_LABELS[role] || role}
+    </span>
+  );
+}
+
+export function Textarea(props) {
+  return (
+    <textarea
+      className="w-full px-3.5 py-2.5 rounded-xl border border-(--color-petrol-100) bg-white text-(--color-ink-900) placeholder:text-(--color-ink-300) focus:border-(--color-petrol-400) focus:ring-2 focus:ring-(--color-petrol-100) outline-none transition-shadow resize-none"
+      {...props}
+    />
+  );
+}
+
+export function PageHeader({ title, description, action }) {
+  return (
+    <div className="flex items-start justify-between flex-wrap gap-3">
+      <div>
+        <h1 className="font-display font-bold text-2xl text-(--color-petrol-700)">{title}</h1>
+        {description && <p className="text-(--color-ink-600) mt-1">{description}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+export function EmptyState({ icon: Icon, title, description, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-14 px-6">
+      {Icon && (
+        <div className="w-12 h-12 rounded-full bg-(--color-petrol-50) flex items-center justify-center mb-4">
+          <Icon size={22} className="text-(--color-petrol-400)" strokeWidth={1.75} />
+        </div>
+      )}
+      <h3 className="font-display font-semibold text-(--color-ink-900) mb-1">{title}</h3>
+      {description && <p className="text-sm text-(--color-ink-600) max-w-sm mb-4">{description}</p>}
+      {action}
+    </div>
+  );
+}
