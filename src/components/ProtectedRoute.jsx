@@ -1,17 +1,18 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { homeForRole } from '../utils/roles';
 
 /**
- * Protege une route : redirige vers /connexion si non authentifie, et vers
- * l'espace correspondant au role de l'utilisateur si celui-ci tente d'acceder
- * a un espace qui ne lui est pas destine (allowedRoles).
+ * Protege une route : redirige vers /connexion si non authentifie (en
+ * memorisant la page demandee pour y revenir apres connexion), et vers
+ * l'espace correspondant au role si l'utilisateur n'y a pas acces.
  */
 export default function ProtectedRoute({ allowedRoles, children }) {
   const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
 
   if (!isAuthenticated) {
-    return <Navigate to="/connexion" replace />;
+    return <Navigate to="/connexion" replace state={{ from: location.pathname }} />;
   }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {

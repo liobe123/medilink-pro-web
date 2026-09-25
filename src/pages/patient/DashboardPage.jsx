@@ -1,41 +1,32 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarHeart, MapPinned, FileHeart, Clock, MapPin, ArrowRight } from 'lucide-react';
+import { CalendarHeart, MapPinned, FileHeart, Clock, MapPin, ArrowRight, CalendarPlus, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getRendezVousByPatient } from '../../api/rendezVous';
-import { Card, Button, Spinner, EmptyState } from '../../components/ui';
+import { useApi } from '../../hooks/useApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { Card, Spinner, EmptyState, ButtonLink, ErrorState, StatutBadge } from '../../components/ui';
+import { formatDateHeure } from '../../utils/format';
+import { downloadRendezVousIcs } from '../../utils/ics';
+import { getErrorMessage } from '../../utils/errors';
 
-function formatDateHeure(iso) {
-  const d = new Date(iso);
-  return {
-    jour: d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
-    heure: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-  };
+/** "dans 3 jours", "demain", "dans 2 h"... */
+function compteARebours(iso) {
+  const diff = new Date(iso) - new Date();
+  const heures = Math.round(diff / 3600000);
+  if (heures < 1) return 'dans moins d\'une heure';
+  if (heures < 24) return `dans ${heures} h`;
+  const jours = Math.round(heures / 24);
+  return jours === 1 ? 'demain' : `dans ${jours} jours`;
 }
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [rendezVous, setRendezVous] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const data = await getRendezVousByPatient(user.userId);
-        if (!cancelled) setRendezVous(data);
-      } catch {
-        if (!cancelled) setRendezVous([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [user.userId]);
+  useDocumentTitle('Accueil');
+  const { data, loading, error, reload } = useApi(() => getRendezVousByPatient(user.userId), [user.userId]);
+  const rendezVous = data || [];
 
   const aVenir = rendezVous
-    .filter((r) => r.statut !== 'ANNULE' && r.statut !== 'TERMINE' && new Date(r.dateHeure) > new Date())
+    .filter((r) => r.statut !== 'ANNULE' && r.statut !== 'TERMINE' && r.statut !== 'NO_SHOW' && new Date(r.dateHeure) > new Date())
     .sort((a, b) => new Date(a.dateHeure) - new Date(b.dateHeure));
 
   const prochain = aVenir[0];
@@ -50,7 +41,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Signature : carte "prochain rendez-vous" en evidence */}
-      {loading ? (
+      {error ? (
+        <ErrorState message={getErrorMessage(error)} onRetry={reload} />
+      ) : loading ? (
         <Card className="p-8 flex justify-center">
           <Spinner className="w-6 h-6" />
         </Card>
@@ -64,9 +57,12 @@ export default function DashboardPage() {
             className="absolute right-16 bottom-0 w-24 h-24 rounded-full bg-white/5"
             aria-hidden="true"
           />
-          <p className="relative text-xs uppercase tracking-wider font-semibold text-(--color-amber-400) mb-2">
-            Prochain rendez-vous
-          </p>
+          <div className="relative flex items-center gap-2 mb-2 flex-wrap">
+            <p className="text-sm font-semibold text-(--color-amber-400)">
+              Prochain rendez-vous, {compteARebours(prochain.dateHeure)}
+            </p>
+            <StatutBadge statut={prochain.statut} />
+          </div>
           <h2 className="relative font-display font-bold text-xl sm:text-2xl mb-4 capitalize">
             {formatDateHeure(prochain.dateHeure).jour} a {formatDateHeure(prochain.dateHeure).heure}
           </h2>
@@ -84,13 +80,25 @@ export default function DashboardPage() {
                 <MapPin size={15} /> {prochain.etablissementNom}
               </span>
             )}
+            {prochain.type === 'TELECONSULTATION' && (
+              <span className="flex items-center gap-1.5"><Video size={15} /> Teleconsultation</span>
+            )}
           </div>
-          <Link
-            to="/patient/rendez-vous"
-            className="relative inline-flex items-center gap-1.5 mt-5 text-sm font-semibold text-(--color-petrol-900) bg-(--color-amber-400) hover:bg-(--color-amber-500) px-4 py-2 rounded-xl transition-colors"
-          >
-            Voir tous mes rendez-vous <ArrowRight size={15} />
-          </Link>
+          <div className="relative flex flex-wrap items-center gap-2 mt-5">
+            <Link
+              to="/patient/rendez-vous"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-(--color-petrol-900) bg-(--color-amber-400) hover:bg-(--color-amber-500) px-4 py-2 rounded-xl transition-colors"
+            >
+              Voir tous mes rendez-vous <ArrowRight size={15} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => downloadRendezVousIcs(prochain)}
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl transition-colors"
+            >
+              <CalendarPlus size={15} /> Ajouter a mon agenda
+            </button>
+          </div>
         </div>
       ) : (
         <Card>
@@ -98,11 +106,7 @@ export default function DashboardPage() {
             icon={CalendarHeart}
             title="Aucun rendez-vous a venir"
             description="Trouvez un specialiste pres de chez vous et prenez rendez-vous en quelques clics."
-            action={
-              <Link to="/patient/recherche">
-                <Button variant="amber">Trouver un specialiste</Button>
-              </Link>
-            }
+            action={<ButtonLink to="/patient/recherche" variant="amber">Trouver un specialiste</ButtonLink>}
           />
         </Card>
       )}

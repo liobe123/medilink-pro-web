@@ -7,6 +7,17 @@ export async function getComptesEnAttente(role) {
   return data;
 }
 
+/**
+ * NOUVEAU — liste de tous les comptes (actifs, desactives, rejetes).
+ * Necessite l'endpoint backend GET /api/admin/comptes (voir README).
+ */
+export async function getAllComptes(role) {
+  const { data } = await api.get('/api/admin/comptes', {
+    params: role ? { role } : {},
+  });
+  return data;
+}
+
 export async function validerCompte(id, { approuve, motifRejet }) {
   const { data } = await api.patch(`/api/admin/comptes/${id}/valider`, { approuve, motifRejet });
   return data;

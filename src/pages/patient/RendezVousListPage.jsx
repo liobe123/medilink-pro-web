@@ -1,91 +1,114 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarHeart, MapPin, Video, Building2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CalendarHeart, MapPin, Video, Building2, X, CalendarPlus, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getRendezVousByPatient, updateStatutRendezVous } from '../../api/rendezVous';
-import { Card, Button, Spinner, EmptyState, StatutBadge } from '../../components/ui';
+import { useApi } from '../../hooks/useApi';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useToast } from '../../components/Toast';
+import { useConfirm } from '../../components/ConfirmDialog';
+import {
+  Card, Button, ButtonLink, EmptyState, StatutBadge, PageHeader, PageLoader, ErrorState, Tabs,
+} from '../../components/ui';
+import { formatDateHeure } from '../../utils/format';
+import { downloadRendezVousIcs } from '../../utils/ics';
+import { getErrorMessage } from '../../utils/errors';
 
-function formatDateHeure(iso) {
-  const d = new Date(iso);
-  return {
-    jour: d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-    heure: d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-  };
+// Delai minimum pour annuler en ligne (au-dela, le patient doit appeler le cabinet).
+const DELAI_ANNULATION_HEURES = 2;
+
+function categorie(r, now) {
+  if (r.statut === 'ANNULE') return 'annules';
+  if (new Date(r.dateHeure) >= now && r.statut !== 'TERMINE' && r.statut !== 'NO_SHOW') return 'avenir';
+  return 'passes';
 }
 
 export default function RendezVousListPage() {
   const { user } = useAuth();
-  const [rendezVous, setRendezVous] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [onglet, setOnglet] = useState('avenir');
   const [cancellingId, setCancellingId] = useState(null);
+  useDocumentTitle('Mes rendez-vous');
 
-  async function load() {
-    setLoading(true);
+  const { data, loading, error, reload, setData } = useApi(
+    () => getRendezVousByPatient(user.userId),
+    [user.userId],
+  );
+
+  const groupes = useMemo(() => {
+    const now = new Date();
+    const g = { avenir: [], passes: [], annules: [] };
+    (data || []).forEach((r) => g[categorie(r, now)].push(r));
+    g.avenir.sort((a, b) => new Date(a.dateHeure) - new Date(b.dateHeure));
+    g.passes.sort((a, b) => new Date(b.dateHeure) - new Date(a.dateHeure));
+    g.annules.sort((a, b) => new Date(b.dateHeure) - new Date(a.dateHeure));
+    return g;
+  }, [data]);
+
+  async function handleCancel(r) {
+    const { jour, heure } = formatDateHeure(r.dateHeure);
+    const ok = await confirm({
+      title: 'Annuler ce rendez-vous ?',
+      message: `Rendez-vous avec Dr ${r.medecinNomComplet}, ${jour} a ${heure}. Le creneau sera libere pour un autre patient.`,
+      confirmLabel: 'Annuler le rendez-vous',
+      cancelLabel: 'Garder',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setCancellingId(r.id);
     try {
-      const data = await getRendezVousByPatient(user.userId);
-      data.sort((a, b) => new Date(b.dateHeure) - new Date(a.dateHeure));
-      setRendezVous(data);
-    } catch {
-      setRendezVous([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.userId]);
-
-  async function handleCancel(id) {
-    setCancellingId(id);
-    try {
-      await updateStatutRendezVous(id, 'ANNULE');
-      await load();
+      await updateStatutRendezVous(r.id, 'ANNULE');
+      setData((prev) => prev.map((x) => (x.id === r.id ? { ...x, statut: 'ANNULE' } : x)));
+      toast.success('Rendez-vous annule.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, "L'annulation a echoue."));
     } finally {
       setCancellingId(null);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <Spinner className="w-7 h-7" />
-      </div>
-    );
-  }
+  if (error) return <ErrorState message={getErrorMessage(error)} onRetry={reload} />;
+  if (loading || !data) return <PageLoader />;
+
+  const liste = groupes[onglet];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="font-display font-bold text-2xl text-(--color-petrol-700)">Mes rendez-vous</h1>
-          <p className="text-(--color-ink-600) mt-1">Retrouvez l'historique et vos prochains rendez-vous.</p>
-        </div>
-        <Link to="/patient/recherche">
-          <Button variant="amber">Nouveau rendez-vous</Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Mes rendez-vous"
+        description="Retrouvez l'historique et vos prochains rendez-vous."
+        action={<ButtonLink to="/patient/recherche" variant="amber">Nouveau rendez-vous</ButtonLink>}
+      />
 
-      {rendezVous.length === 0 ? (
+      {data.length > 0 && (
+        <Tabs
+          value={onglet}
+          onChange={setOnglet}
+          tabs={[
+            { value: 'avenir', label: 'A venir', count: groupes.avenir.length },
+            { value: 'passes', label: 'Passes', count: groupes.passes.length },
+            { value: 'annules', label: 'Annules', count: groupes.annules.length },
+          ]}
+        />
+      )}
+
+      {liste.length === 0 ? (
         <Card>
           <EmptyState
             icon={CalendarHeart}
-            title="Aucun rendez-vous"
-            description="Vous n'avez encore pris aucun rendez-vous."
-            action={
-              <Link to="/patient/recherche">
-                <Button variant="amber">Trouver un specialiste</Button>
-              </Link>
-            }
+            title={data.length === 0 ? 'Aucun rendez-vous' : 'Rien ici pour le moment'}
+            description={data.length === 0 ? "Vous n'avez encore pris aucun rendez-vous." : 'Aucun rendez-vous dans cette categorie.'}
+            action={onglet === 'avenir' && <ButtonLink to="/patient/recherche" variant="amber">Trouver un specialiste</ButtonLink>}
           />
         </Card>
       ) : (
         <div className="space-y-3">
-          {rendezVous.map((r) => {
-            const { jour, heure } = formatDateHeure(r.dateHeure);
-            const isPast = new Date(r.dateHeure) < new Date();
-            const canCancel = !isPast && r.statut !== 'ANNULE' && r.statut !== 'TERMINE';
+          {liste.map((r) => {
+            const { jour, heure } = formatDateHeure(r.dateHeure, { withYear: true });
+            const heuresRestantes = (new Date(r.dateHeure) - new Date()) / 3600000;
+            const isAvenir = onglet === 'avenir';
+            const canCancel = isAvenir && heuresRestantes >= DELAI_ANNULATION_HEURES;
             return (
               <Card key={r.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -93,8 +116,8 @@ export default function RendezVousListPage() {
                     <p className="font-display font-semibold text-(--color-ink-900) capitalize">{jour}</p>
                     <StatutBadge statut={r.statut} />
                   </div>
-                  <p className="text-sm text-(--color-ink-600) mt-0.5">{heure} · Dr {r.medecinNomComplet}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-(--color-ink-600)">
+                  <p className="text-sm text-(--color-ink-600) mt-0.5">{heure} avec Dr {r.medecinNomComplet}</p>
+                  <div className="flex items-center gap-3 mt-2 text-xs text-(--color-ink-600) flex-wrap">
                     <span className="flex items-center gap-1">
                       {r.type === 'TELECONSULTATION' ? <Video size={13} /> : <Building2 size={13} />}
                       {r.type === 'TELECONSULTATION' ? 'Teleconsultation' : 'Consultation physique'}
@@ -103,19 +126,31 @@ export default function RendezVousListPage() {
                       <span className="flex items-center gap-1"><MapPin size={13} /> {r.etablissementNom}</span>
                     )}
                   </div>
+                  {isAvenir && !canCancel && (
+                    <p className="text-xs text-(--color-amber-500) mt-2">
+                      Moins de {DELAI_ANNULATION_HEURES} h avant le rendez-vous : contactez le cabinet pour annuler.
+                    </p>
+                  )}
                 </div>
 
-                {canCancel && (
-                  <Button
-                    variant="danger"
-                    onClick={() => handleCancel(r.id)}
-                    disabled={cancellingId === r.id}
-                    className="shrink-0"
-                  >
-                    <X size={15} />
-                    {cancellingId === r.id ? 'Annulation...' : 'Annuler'}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  {isAvenir && (
+                    <Button variant="outline" onClick={() => downloadRendezVousIcs(r)} title="Ajouter a mon agenda">
+                      <CalendarPlus size={15} /> <span className="sm:hidden lg:inline">Agenda</span>
+                    </Button>
+                  )}
+                  {canCancel && (
+                    <Button variant="danger" onClick={() => handleCancel(r)} disabled={cancellingId === r.id}>
+                      <X size={15} />
+                      {cancellingId === r.id ? 'Annulation...' : 'Annuler'}
+                    </Button>
+                  )}
+                  {!isAvenir && r.medecinId && (
+                    <ButtonLink to={`/patient/rendez-vous/nouveau/${r.medecinId}`} variant="ghost">
+                      <RotateCcw size={15} /> Reprendre RDV
+                    </ButtonLink>
+                  )}
+                </div>
               </Card>
             );
           })}

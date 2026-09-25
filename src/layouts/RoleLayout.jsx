@@ -1,12 +1,16 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Suspense } from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LogOut, Stethoscope } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { PageLoader } from '../components/ui';
 
 /**
  * Layout partage par tous les espaces authentifies (Patient, Medecin, Secretaire,
  * Directeur, Admin). Les items de navigation sont fournis par chaque espace via
  * navItems, ce qui permet a chaque role d'avoir son propre menu tout en gardant
  * une identite visuelle et une structure communes.
+ *
+ * Utilise comme "layout route" : les pages enfants s'affichent via <Outlet />.
  */
 export default function RoleLayout({ navItems, roleLabel, children }) {
   const { user, logout } = useAuth();
@@ -19,7 +23,7 @@ export default function RoleLayout({ navItems, roleLabel, children }) {
 
   return (
     <div className="min-h-screen bg-(--color-ivory)">
-      <header className="border-b border-(--color-petrol-100) bg-white/80 backdrop-blur sticky top-0 z-20">
+      <header className="border-b border-(--color-petrol-100) bg-white/80 backdrop-blur sticky top-0 z-20 print:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-(--color-petrol-600) flex items-center justify-center text-(--color-ivory)">
@@ -35,7 +39,7 @@ export default function RoleLayout({ navItems, roleLabel, children }) {
             )}
           </div>
 
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1" aria-label="Navigation principale">
             {navItems.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
@@ -60,6 +64,7 @@ export default function RoleLayout({ navItems, roleLabel, children }) {
               {user?.prenom} {user?.nom}
             </span>
             <button
+              type="button"
               onClick={handleLogout}
               className="flex items-center gap-1.5 text-sm font-medium text-(--color-clay-500) hover:text-(--color-clay-500)/80 transition-colors px-3 py-2 rounded-full hover:bg-(--color-clay-100)"
             >
@@ -90,7 +95,13 @@ export default function RoleLayout({ navItems, roleLabel, children }) {
         </nav>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">{children}</main>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 print:p-0 print:max-w-none">
+        {/* Les pages sont chargees a la demande (React.lazy) : Suspense affiche
+            un indicateur pendant le telechargement du morceau de code. */}
+        <Suspense fallback={<PageLoader />}>
+          {children ?? <Outlet />}
+        </Suspense>
+      </main>
     </div>
   );
 }

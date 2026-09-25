@@ -4,7 +4,9 @@ import {
   ArrowRight, Search, Navigation, BadgeCheck, ClipboardList, Building2,
   UserCog, ChevronRight,
 } from 'lucide-react';
-import { Button } from '../../components/ui';
+import { ButtonLink } from '../../components/ui';
+import { useAuth } from '../../context/AuthContext';
+import { homeForRole } from '../../utils/roles';
 
 const ESPACES = [
   {
@@ -105,6 +107,8 @@ function MockSearchCard() {
 }
 
 export default function LandingPage() {
+  const { isAuthenticated, user } = useAuth();
+
   return (
     <div className="bg-(--color-ivory) text-(--color-ink-900)">
       {/* Header */}
@@ -119,12 +123,14 @@ export default function LandingPage() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/connexion">
-              <Button variant="ghost">Se connecter</Button>
-            </Link>
-            <Link to="/inscription">
-              <Button variant="amber">S'inscrire</Button>
-            </Link>
+            {isAuthenticated ? (
+              <ButtonLink to={homeForRole(user?.role)} variant="amber">Mon espace</ButtonLink>
+            ) : (
+              <>
+                <ButtonLink to="/connexion" variant="ghost">Se connecter</ButtonLink>
+                <ButtonLink to="/inscription" variant="amber">S'inscrire</ButtonLink>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -144,16 +150,8 @@ export default function LandingPage() {
             en quelques clics.
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-8">
-            <Link to="/inscription">
-              <Button variant="amber" className="text-base px-5 py-3">
-                Creer mon compte <ArrowRight size={17} />
-              </Button>
-            </Link>
-            <Link to="/connexion">
-              <Button variant="ghost" className="text-base px-5 py-3">
-                J'ai deja un compte
-              </Button>
-            </Link>
+            <ButtonLink to="/inscription" variant="amber" className="text-base px-5 py-3">Creer mon compte <ArrowRight size={17} /></ButtonLink>
+            <ButtonLink to="/connexion" variant="ghost" className="text-base px-5 py-3">J'ai deja un compte</ButtonLink>
           </div>
           <div className="flex items-center gap-2 text-sm text-(--color-ink-600) mt-7">
             <ShieldCheck size={16} className="text-(--color-sage-500)" />
@@ -238,11 +236,7 @@ export default function LandingPage() {
           <p className="relative text-white/80 mt-3 max-w-md mx-auto">
             Rejoignez MediLinkPro en quelques minutes, gratuitement.
           </p>
-          <Link to="/inscription" className="relative inline-block mt-7">
-            <Button variant="amber" className="text-base px-6 py-3">
-              Creer mon compte <ArrowRight size={17} />
-            </Button>
-          </Link>
+          <ButtonLink to="/inscription" variant="amber" className="text-base px-6 py-3 relative mt-7">Creer mon compte <ArrowRight size={17} /></ButtonLink>
         </div>
       </section>
 
@@ -254,6 +248,9 @@ export default function LandingPage() {
             <span className="font-display font-semibold text-(--color-petrol-700)">MediLinkPro</span>
           </div>
           <p>Suivi medical et localisation des specialistes — Cameroun</p>
+          <Link to="/verifier-ordonnance" className="font-medium text-(--color-petrol-600) hover:underline">
+            Pharmacien ? Verifier une ordonnance
+          </Link>
         </div>
       </footer>
     </div>

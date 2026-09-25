@@ -1,11 +1,26 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import * as authApi from '../api/auth';
+import { TOKEN_KEY, USER_KEY } from '../api/client';
+import { getErrorMessage } from '../utils/errors';
+import { getTokenExpiration, isTokenExpired } from '../utils/jwt';
 
 const AuthContext = createContext(null);
 
+function clearStorage() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(USER_KEY);
+}
+
 function readStoredUser() {
   try {
-    const raw = sessionStorage.getItem('medilinkpro_user');
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    // Un utilisateur sans token valide n'est pas considere comme connecte
+    // (avant : un "user" orphelin en session suffisait a passer ProtectedRoute).
+    if (isTokenExpired(token)) {
+      clearStorage();
+      return null;
+    }
+    const raw = sessionStorage.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -19,10 +34,29 @@ export function AuthProvider({ children }) {
 
   const persistSession = useCallback((authResponse) => {
     const { token, ...userInfo } = authResponse;
-    sessionStorage.setItem('medilinkpro_token', token);
-    sessionStorage.setItem('medilinkpro_user', JSON.stringify(userInfo));
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(userInfo));
     setUser(userInfo);
   }, []);
+
+  const logout = useCallback(() => {
+    clearStorage();
+    setUser(null);
+  }, []);
+
+  // Deconnexion automatique a l'expiration du token.
+  useEffect(() => {
+    if (!user) return undefined;
+    const exp = getTokenExpiration(sessionStorage.getItem(TOKEN_KEY));
+    if (!exp) return undefined;
+    const delay = exp - Date.now();
+    if (delay <= 0) { logout(); return undefined; }
+    // setTimeout est limite a ~24,8 jours
+    const timer = setTimeout(logout, Math.min(delay, 2 ** 31 - 1));
+    return () => clearTimeout(timer);
+  }, [user, logout]);
+
+  const clearError = useCallback(() => setError(null), []);
 
   const login = useCallback(async (credentials) => {
     setLoading(true);
@@ -32,8 +66,9 @@ export function AuthProvider({ children }) {
       persistSession(response);
       return response;
     } catch (err) {
-      const message = err.response?.data?.message || "Email ou mot de passe incorrect.";
-      setError(message);
+      setError(err.response?.status === 401
+        ? 'Email ou mot de passe incorrect.'
+        : getErrorMessage(err, 'Email ou mot de passe incorrect.'));
       throw err;
     } finally {
       setLoading(false);
@@ -53,27 +88,31 @@ export function AuthProvider({ children }) {
       }
       return response;
     } catch (err) {
-      const message = err.response?.data?.message || "Impossible de creer le compte.";
-      setError(message);
+      setError(getErrorMessage(err, 'Impossible de creer le compte.'));
       throw err;
     } finally {
       setLoading(false);
     }
   }, [persistSession]);
 
-  const logout = useCallback(() => {
-    sessionStorage.removeItem('medilinkpro_token');
-    sessionStorage.removeItem('medilinkpro_user');
-    setUser(null);
+  /** Met a jour les infos affichees (ex. nom modifie depuis la page profil). */
+  const updateUser = useCallback((patch) => {
+    setUser((prev) => {
+      const next = { ...prev, ...patch };
+      sessionStorage.setItem(USER_KEY, JSON.stringify(next));
+      return next;
+    });
   }, []);
 
-  const value = { user, loading, error, login, register, logout, isAuthenticated: !!user };
+  const value = useMemo(() => ({
+    user, loading, error, login, register, logout, clearError, updateUser, isAuthenticated: !!user,
+  }), [user, loading, error, login, register, logout, clearError, updateUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth doit etre utilise a l\'interieur de AuthProvider');
+  if (!ctx) throw new Error("useAuth doit etre utilise a l'interieur de AuthProvider");
   return ctx;
 }

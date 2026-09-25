@@ -1,5 +1,5 @@
 import { LayoutDashboard, Building2, Stethoscope, Users } from 'lucide-react';
-import RoleLayout from '../layouts/RoleLayout';
+import RoleLayout from './RoleLayout';
 
 const NAV_ITEMS = [
   { to: '/directeur', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
@@ -9,9 +9,5 @@ const NAV_ITEMS = [
 ];
 
 export default function DirecteurLayout({ children }) {
-  return (
-    <RoleLayout navItems={NAV_ITEMS} roleLabel="Espace direction">
-      {children}
-    </RoleLayout>
-  );
+  return <RoleLayout navItems={NAV_ITEMS} roleLabel="Espace direction">{children}</RoleLayout>;
 }

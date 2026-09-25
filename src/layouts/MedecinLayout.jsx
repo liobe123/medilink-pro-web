@@ -1,5 +1,5 @@
 import { LayoutDashboard, CalendarHeart, Users, FileText, UserCog } from 'lucide-react';
-import RoleLayout from '../layouts/RoleLayout';
+import RoleLayout from './RoleLayout';
 
 const NAV_ITEMS = [
   { to: '/medecin', label: 'Accueil', icon: LayoutDashboard, end: true },
@@ -10,9 +10,5 @@ const NAV_ITEMS = [
 ];
 
 export default function MedecinLayout({ children }) {
-  return (
-    <RoleLayout navItems={NAV_ITEMS} roleLabel="Espace medecin">
-      {children}
-    </RoleLayout>
-  );
+  return <RoleLayout navItems={NAV_ITEMS} roleLabel="Espace medecin">{children}</RoleLayout>;
 }

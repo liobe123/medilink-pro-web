@@ -27,3 +27,12 @@ export async function updateMedecin(medecinId, payload) {
 export async function deleteMedecin(medecinId) {
   await api.delete(`/api/medecins/${medecinId}`);
 }
+
+/**
+ * Heures deja reservees chez un medecin pour une date (YYYY-MM-DD), sans
+ * information sur les patients. Accessible a tous les roles.
+ */
+export async function getCreneauxOccupes(medecinId, date) {
+  const { data } = await api.get(`/api/medecins/${medecinId}/creneaux-occupes`, { params: { date } });
+  return data;
+}

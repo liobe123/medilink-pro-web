@@ -53,3 +53,29 @@ h1, h2, h3, h4, .font-display {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Impression ---------- */
+@media print {
+  html, body {
+    background: white;
+  }
+
+  /* Par defaut, les modales ne s'impriment pas... */
+  body:not(.imprimer-modale) .modale-portail {
+    display: none;
+  }
+
+  /* ...sauf quand on imprime explicitement leur contenu (ordonnance). */
+  body.imprimer-modale #root {
+    display: none;
+  }
+
+  body.imprimer-modale .modale-portail {
+    position: static;
+    display: block;
+  }
+
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+}

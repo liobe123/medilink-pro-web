@@ -1,25 +1,48 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   Stethoscope, AlertCircle, ArrowLeft, CheckCircle2, User, ClipboardList, Building2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Button, TextInput, FieldLabel, Select } from '../components/ui';
+import { Button, TextInput, PasswordInput, FieldLabel, Select, Alert, ButtonLink } from '../components/ui';
 import { homeForRole } from '../utils/roles';
+import { GROUPES_SANGUINS, GROUPE_LABELS } from '../utils/constants';
+import { toLocalDateInput } from '../utils/format';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
-const GROUPES_SANGUINS = [
-  '', 'A_POSITIF', 'A_NEGATIF', 'B_POSITIF', 'B_NEGATIF',
-  'AB_POSITIF', 'AB_NEGATIF', 'O_POSITIF', 'O_NEGATIF', 'INCONNU',
+/** Score 0-4 : longueur, chiffres, majuscules, caracteres speciaux. */
+function passwordStrength(pwd) {
+  if (!pwd) return 0;
+  let score = 0;
+  if (pwd.length >= 8) score++;
+  if (/\d/.test(pwd)) score++;
+  if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score++;
+  if (/[^A-Za-z0-9]/.test(pwd)) score++;
+  return score;
+}
+
+const STRENGTH = [
+  { label: 'Trop court', color: 'bg-(--color-clay-500)' },
+  { label: 'Faible', color: 'bg-(--color-clay-500)' },
+  { label: 'Moyen', color: 'bg-(--color-amber-400)' },
+  { label: 'Bon', color: 'bg-(--color-sage-500)' },
+  { label: 'Excellent', color: 'bg-(--color-sage-500)' },
 ];
 
-const GROUPE_LABELS = {
-  '': 'Je ne sais pas',
-  A_POSITIF: 'A+', A_NEGATIF: 'A-',
-  B_POSITIF: 'B+', B_NEGATIF: 'B-',
-  AB_POSITIF: 'AB+', AB_NEGATIF: 'AB-',
-  O_POSITIF: 'O+', O_NEGATIF: 'O-',
-  INCONNU: 'Inconnu',
-};
+function PasswordStrength({ value }) {
+  if (!value) return null;
+  const score = passwordStrength(value);
+  return (
+    <div className="mt-2">
+      <div className="flex gap-1" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`h-1 flex-1 rounded-full ${i < score ? STRENGTH[score].color : 'bg-(--color-petrol-100)'}`} />
+        ))}
+      </div>
+      <p className="text-xs text-(--color-ink-600) mt-1">Securite : {STRENGTH[score].label}</p>
+    </div>
+  );
+}
 
 // L'inscription ADMIN n'est volontairement pas proposee ici : un administrateur
 // est cree par un administrateur existant, pas via l'inscription publique.
@@ -31,34 +54,52 @@ const ROLES = [
 ];
 
 const INITIAL_FORM = {
-  nom: '', prenom: '', email: '', motDePasse: '', telephone: '',
+  nom: '', prenom: '', email: '', motDePasse: '', confirmation: '', telephone: '',
   dateNaissance: '', groupeSanguin: '',
   specialite: '', numeroOrdre: '', tarif: '',
 };
 
 export default function RegisterPage() {
-  const { register, loading, error } = useAuth();
+  const { register, loading, error, clearError, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const [role, setRole] = useState('PATIENT');
   const [form, setForm] = useState(INITIAL_FORM);
   const [pendingMessage, setPendingMessage] = useState(null);
+  const [localError, setLocalError] = useState(null);
+  useDocumentTitle('Inscription');
+
+  useEffect(() => { clearError(); }, [clearError]);
+
+  if (isAuthenticated) {
+    return <Navigate to={homeForRole(user?.role)} replace />;
+  }
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  // On conserve l'identite deja saisie quand on change de profil ;
+  // seuls les champs specifiques au role sont reinitialises.
   function handleRoleChange(value) {
     setRole(value);
-    setForm(INITIAL_FORM);
+    setForm((prev) => ({
+      ...INITIAL_FORM,
+      nom: prev.nom, prenom: prev.prenom, email: prev.email, telephone: prev.telephone,
+    }));
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setLocalError(null);
+    if (form.motDePasse !== form.confirmation) {
+      setLocalError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
     try {
       const payload = {
         nom: form.nom,
         prenom: form.prenom,
-        email: form.email,
+        email: form.email.trim(),
         motDePasse: form.motDePasse,
         telephone: form.telephone || null,
         role,
@@ -96,9 +137,7 @@ export default function RegisterPage() {
           </div>
           <h1 className="font-display font-bold text-2xl text-(--color-petrol-700)">Demande envoyee</h1>
           <p className="text-(--color-ink-600) mt-3">{pendingMessage}</p>
-          <Link to="/connexion" className="inline-block mt-7">
-            <Button variant="ghost">Retour a la connexion</Button>
-          </Link>
+          <ButtonLink to="/connexion" variant="ghost" className="mt-7">Retour a la connexion</ButtonLink>
         </div>
       </div>
     );
@@ -148,11 +187,8 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {error && (
-            <div className="flex items-start gap-2 bg-(--color-clay-100) text-(--color-clay-500) text-sm rounded-xl px-3.5 py-3 mb-4">
-              <AlertCircle size={16} className="mt-0.5 shrink-0" />
-              <span>{error}</span>
-            </div>
+          {(localError || error) && (
+            <Alert icon={AlertCircle} className="mb-4">{localError || error}</Alert>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -180,14 +216,28 @@ export default function RegisterPage() {
 
             <div>
               <FieldLabel>Mot de passe</FieldLabel>
-              <TextInput
-                type="password"
+              <PasswordInput
                 required
                 minLength={6}
+                autoComplete="new-password"
                 placeholder="Au moins 6 caracteres"
                 value={form.motDePasse}
                 onChange={(e) => update('motDePasse', e.target.value)}
               />
+              <PasswordStrength value={form.motDePasse} />
+            </div>
+
+            <div>
+              <FieldLabel>Confirmer le mot de passe</FieldLabel>
+              <PasswordInput
+                required
+                autoComplete="new-password"
+                value={form.confirmation}
+                onChange={(e) => update('confirmation', e.target.value)}
+              />
+              {form.confirmation && form.confirmation !== form.motDePasse && (
+                <p className="text-xs text-(--color-clay-500) mt-1">Les mots de passe ne correspondent pas.</p>
+              )}
             </div>
 
             <div>
@@ -206,6 +256,7 @@ export default function RegisterPage() {
                   <FieldLabel>Date de naissance</FieldLabel>
                   <TextInput
                     type="date"
+                    max={toLocalDateInput()}
                     value={form.dateNaissance}
                     onChange={(e) => update('dateNaissance', e.target.value)}
                   />
